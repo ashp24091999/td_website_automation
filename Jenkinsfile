@@ -8,7 +8,7 @@ pipeline {
 
   environment {
     BASE_URL = 'https://www.td.com/ca/en/personal-banking'
-    HEADLESS = 'true'
+    HEADLESS = 'false'
   }
 
   stages {
