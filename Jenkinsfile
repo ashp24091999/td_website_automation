@@ -1,62 +1,38 @@
-pipeline {
-  agent any
+stage('Publish Reports') {
+  steps {
+    // JUnit so Jenkins shows test counts
+    junit testResults: 'target/surefire-reports/*.xml', allowEmptyResults: true
 
-  tools {
-    jdk   'jdk-21'       // keep this name as you set it
-    maven 'maven-3.9'    // <-- use this (not maven-3.9.11)
-  }
+    // Find the real Cucumber HTML report and publish it
+    script {
+      // Add/adjust candidates if your structure is different
+      def candidates = [
+        'Report/cucumber/index.html',                 // cucumber/ index.html
+        'Report/cucumber.html',                       // single file in Report
+        'Report/index.html',                          // generic index.html in Report
+        'Report/cucumber/cucumber.html',              // some generators do this
+        'Report/cucumber-reports/overview-features.html' // popular plugin name
+      ]
 
-  options {
-    timestamps()
-    disableConcurrentBuilds()
-    timeout(time: 30, unit: 'MINUTES')
-  }
-
-  environment {
-    BASE_URL = 'https://www.td.com/ca/en/personal-banking'
-    HEADLESS = 'true'
-  }
-
-  stages {
-    stage('Checkout') {
-      steps { checkout scm }
-    }
-
-    stage('Build & Test (Headless Chrome)') {
-      steps {
-        bat 'mvn -B -Dheadless=%HEADLESS% -DbaseUrl="%BASE_URL%" clean test'
+      def found = candidates.find { fileExists(it) }
+      if (found) {
+        echo "Publishing Cucumber report: ${found}"
+        def dir  = found.substring(0, found.lastIndexOf('/'))
+        def file = found.substring(found.lastIndexOf('/') + 1)
+        publishHTML([
+          reportDir: dir,
+          reportFiles: file,
+          reportName: 'Cucumber UI Report',
+          keepAll: true,
+          alwaysLinkToLastBuild: true,
+          allowMissing: false
+        ])
+      } else {
+        error "Could not find a Cucumber HTML report. Checked:\n - " + candidates.join('\n - ')
       }
     }
 
-    stage('Publish Reports') {
-      steps {
-        junit testResults: 'target/surefire-reports/*.xml', allowEmptyResults: true
-        script {
-          if (fileExists('Report/cucumber/index.html')) {
-            publishHTML([
-              reportDir: 'Report/cucumber',
-              reportFiles: 'index.html',
-              reportName: 'Cucumber UI Report',
-              keepAll: true, alwaysLinkToLastBuild: true, allowMissing: true
-            ])
-          } else if (fileExists('Report/cucumber.html')) {
-            publishHTML([
-              reportDir: 'Report',
-              reportFiles: 'cucumber.html',
-              reportName: 'Cucumber UI Report',
-              keepAll: true, alwaysLinkToLastBuild: true, allowMissing: true
-            ])
-          } else {
-            echo 'Cucumber HTML file not found under Report/.'
-          }
-        }
-      }
-    }
-  }
-
-  post {
-    always {
-      archiveArtifacts artifacts: 'Report/**, target/**', fingerprint: true
-    }
+    // Keep raw files too
+    archiveArtifacts artifacts: 'Report/**, target/**', fingerprint: true
   }
 }
