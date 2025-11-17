@@ -13,7 +13,7 @@ pipeline {
     GCP_PROJECT = 'my-fdm-jenkinsproject'
     GCS_BUCKET  = 'aiswarya-jenkins-reports'
 
-    // Path where Google Cloud SDK is installed (from: where gcloud)
+    // Path where Google Cloud SDK is installed (from `where gcloud`)
     GCLOUD_PATH = 'C:\\Users\\ashp2\\AppData\\Local\\Google\\Cloud SDK\\google-cloud-sdk\\bin'
   }
 
@@ -61,54 +61,36 @@ pipeline {
           }
         }
 
-        // Keep raw artifacts too
+        // Archive raw artifacts too
         archiveArtifacts artifacts: 'Report/**, target/**', fingerprint: true
       }
     }
 
-    // Authenticate with GCP (service account)
+    // Authenticate with GCP once (using service account key in Jenkins)
     stage('GCP Auth') {
       steps {
         withCredentials([file(credentialsId: 'gcp-sa-key', variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
-          bat """
-          set PATH=%GCLOUD_PATH%;%PATH%
-          gcloud auth activate-service-account --key-file="%GOOGLE_APPLICATION_CREDENTIALS%"
-          gcloud config set project %GCP_PROJECT%
-          """
+          bat 'set PATH=%GCLOUD_PATH%;%PATH% && gcloud auth activate-service-account --key-file="%GOOGLE_APPLICATION_CREDENTIALS%" && gcloud config set project %GCP_PROJECT%'
         }
       }
     }
 
-    // Upload test outputs to GCP bucket
+    // Upload demo file (and prove integration with GCS)
     stage('Upload Reports to GCS') {
       steps {
         withCredentials([file(credentialsId: 'gcp-sa-key', variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
-          bat """
-          echo === Upload Reports to GCS stage starting ===
 
-          set PATH=%GCLOUD_PATH%;%PATH%
-          echo PATH is: %PATH%
+          // Make sure PATH and project are set again in this step
+          bat 'set PATH=%GCLOUD_PATH%;%PATH% && gcloud auth activate-service-account --key-file="%GOOGLE_APPLICATION_CREDENTIALS%" && gcloud config set project %GCP_PROJECT%'
 
-          echo Authenticating again inside upload stage...
-          gcloud auth activate-service-account --key-file="%GOOGLE_APPLICATION_CREDENTIALS%"
-          gcloud config set project %GCP_PROJECT%
+          // Create a simple demo file in the workspace
+          bat 'echo Jenkins to GCP integration successful > jenkins-gcp-demo.txt'
 
-          echo Creating demo file...
-          echo Jenkins to GCP integration successful > jenkins-gcp-demo.txt
+          // Upload the demo file to your bucket
+          bat '"%GCLOUD_PATH%\\gsutil.cmd" cp jenkins-gcp-demo.txt gs://%GCS_BUCKET%/'
 
-          echo Uploading demo file with gsutil...
-          "%GCLOUD_PATH%\\gsutil.cmd" cp jenkins-gcp-demo.txt gs://%GCS_BUCKET%/
-
-          echo Listing bucket contents after upload...
-          "%GCLOUD_PATH%\\gsutil.cmd" ls gs://%GCS_BUCKET%/**
-
-          echo Uploading surefire reports if present...
-          IF EXIST target\\surefire-reports (
-              "%GCLOUD_PATH%\\gsutil.cmd" cp target\\surefire-reports\\* gs://%GCS_BUCKET%/surefire-reports/
-          )
-
-          echo === Upload Reports to GCS stage finished ===
-          """
+          // List bucket contents so you can see it in the Jenkins log
+          bat '"%GCLOUD_PATH%\\gsutil.cmd" ls gs://%GCS_BUCKET%/'
         }
       }
     }
