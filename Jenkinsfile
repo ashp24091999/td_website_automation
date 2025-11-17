@@ -3,16 +3,18 @@ pipeline {
 
   tools {
     jdk   'jdk-21'
-    maven 'maven-3.9'   
+    maven 'maven-3.9'
   }
 
   environment {
     BASE_URL   = 'https://www.td.com/ca/en/personal-banking'
     HEADLESS   = 'false'
 
-    //  GCP integration values ( real project + bucket)
     GCP_PROJECT = 'my-fdm-jenkinsproject'
     GCS_BUCKET  = 'aiswarya-jenkins-reports'
+
+    // Add Google Cloud SDK path for Jenkins
+    GCLOUD_PATH = 'C:\\Users\\ashp2\\AppData\\Local\\Google\\Cloud SDK\\google-cloud-sdk\\bin'
   }
 
   stages {
@@ -29,10 +31,8 @@ pipeline {
 
     stage('Publish Reports') {
       steps {
-        // JUnit results for Jenkins test trend
         junit testResults: 'target/surefire-reports/*.xml', allowEmptyResults: true
 
-        // Find & publish the real Cucumber HTML report
         script {
           def candidates = [
             'Report/cucumber/index.html',
@@ -59,16 +59,16 @@ pipeline {
           }
         }
 
-        // Keep raw artifacts too
         archiveArtifacts artifacts: 'Report/**, target/**', fingerprint: true
       }
     }
 
-    // Authenticate Jenkins to GCP using  JSON service account
+    //  Authenticate with GCP
     stage('GCP Auth') {
       steps {
         withCredentials([file(credentialsId: 'gcp-sa-key', variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
           bat """
+          set PATH=%GCLOUD_PATH%;%PATH%
           gcloud auth activate-service-account --key-file="%GOOGLE_APPLICATION_CREDENTIALS%"
           gcloud config set project %GCP_PROJECT%
           """
@@ -76,21 +76,20 @@ pipeline {
       }
     }
 
-    // Upload test artifacts to  GCS bucket
+    // Upload test outputs to GCP bucket
     stage('Upload Reports to GCS') {
       steps {
         withCredentials([file(credentialsId: 'gcp-sa-key', variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
           bat """
+          set PATH=%GCLOUD_PATH%;%PATH%
+
           gcloud auth activate-service-account --key-file="%GOOGLE_APPLICATION_CREDENTIALS%"
           gcloud config set project %GCP_PROJECT%
 
-          REM Create a demo file to prove the integration works
           echo Jenkins to GCP integration successful > jenkins-gcp-demo.txt
 
-          REM Upload the demo file
           gsutil cp jenkins-gcp-demo.txt gs://%GCS_BUCKET%/
 
-          REM OPTIONAL: Upload Maven test reports if they exist
           IF EXIST target\\surefire-reports (
               gsutil cp target\\surefire-reports\\* gs://%GCS_BUCKET%/surefire-reports/
           )
