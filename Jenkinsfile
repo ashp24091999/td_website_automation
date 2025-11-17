@@ -13,7 +13,7 @@ pipeline {
     GCP_PROJECT = 'my-fdm-jenkinsproject'
     GCS_BUCKET  = 'aiswarya-jenkins-reports'
 
-    // Add Google Cloud SDK path for Jenkins
+    // Path where Google Cloud SDK is installed (from: where gcloud)
     GCLOUD_PATH = 'C:\\Users\\ashp2\\AppData\\Local\\Google\\Cloud SDK\\google-cloud-sdk\\bin'
   }
 
@@ -31,8 +31,10 @@ pipeline {
 
     stage('Publish Reports') {
       steps {
+        // JUnit results
         junit testResults: 'target/surefire-reports/*.xml', allowEmptyResults: true
 
+        // Find & publish Cucumber HTML report
         script {
           def candidates = [
             'Report/cucumber/index.html',
@@ -59,11 +61,12 @@ pipeline {
           }
         }
 
+        // Keep raw artifacts too
         archiveArtifacts artifacts: 'Report/**, target/**', fingerprint: true
       }
     }
 
-    //  Authenticate with GCP
+    // Authenticate with GCP (service account)
     stage('GCP Auth') {
       steps {
         withCredentials([file(credentialsId: 'gcp-sa-key', variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
@@ -81,18 +84,30 @@ pipeline {
       steps {
         withCredentials([file(credentialsId: 'gcp-sa-key', variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
           bat """
-          set PATH=%GCLOUD_PATH%;%PATH%
+          echo === Upload Reports to GCS stage starting ===
 
+          set PATH=%GCLOUD_PATH%;%PATH%
+          echo PATH is: %PATH%
+
+          echo Authenticating again inside upload stage...
           gcloud auth activate-service-account --key-file="%GOOGLE_APPLICATION_CREDENTIALS%"
           gcloud config set project %GCP_PROJECT%
 
+          echo Creating demo file...
           echo Jenkins to GCP integration successful > jenkins-gcp-demo.txt
 
-          gsutil cp jenkins-gcp-demo.txt gs://%GCS_BUCKET%/
+          echo Uploading demo file with gsutil...
+          "%GCLOUD_PATH%\\gsutil.cmd" cp jenkins-gcp-demo.txt gs://%GCS_BUCKET%/
 
+          echo Listing bucket contents after upload...
+          "%GCLOUD_PATH%\\gsutil.cmd" ls gs://%GCS_BUCKET%/**
+
+          echo Uploading surefire reports if present...
           IF EXIST target\\surefire-reports (
-              gsutil cp target\\surefire-reports\\* gs://%GCS_BUCKET%/surefire-reports/
+              "%GCLOUD_PATH%\\gsutil.cmd" cp target\\surefire-reports\\* gs://%GCS_BUCKET%/surefire-reports/
           )
+
+          echo === Upload Reports to GCS stage finished ===
           """
         }
       }
