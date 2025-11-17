@@ -3,14 +3,14 @@ pipeline {
 
   tools {
     jdk   'jdk-21'
-    maven 'maven-3.9'   // <-- must match Manage Jenkins > Tools > Maven name
+    maven 'maven-3.9'   
   }
 
   environment {
     BASE_URL   = 'https://www.td.com/ca/en/personal-banking'
     HEADLESS   = 'false'
 
-    // 🔽 GCP integration values (your real project + bucket)
+    //  GCP integration values ( real project + bucket)
     GCP_PROJECT = 'my-fdm-jenkinsproject'
     GCS_BUCKET  = 'aiswarya-jenkins-reports'
   }
@@ -64,7 +64,7 @@ pipeline {
       }
     }
 
-    // 🔽 NEW: Authenticate Jenkins to GCP using your JSON service account
+    // Authenticate Jenkins to GCP using  JSON service account
     stage('GCP Auth') {
       steps {
         withCredentials([file(credentialsId: 'gcp-sa-key', variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
@@ -76,7 +76,7 @@ pipeline {
       }
     }
 
-    // 🔽 NEW: Upload test artifacts to your GCS bucket
+    // Upload test artifacts to  GCS bucket
     stage('Upload Reports to GCS') {
       steps {
         withCredentials([file(credentialsId: 'gcp-sa-key', variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
