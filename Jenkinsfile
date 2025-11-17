@@ -7,11 +7,16 @@ pipeline {
   }
 
   environment {
-    BASE_URL = 'https://www.td.com/ca/en/personal-banking'
-    HEADLESS = 'false'
+    BASE_URL   = 'https://www.td.com/ca/en/personal-banking'
+    HEADLESS   = 'false'
+
+    // 🔽 GCP integration values (your real project + bucket)
+    GCP_PROJECT = 'my-fdm-jenkinsproject'
+    GCS_BUCKET  = 'aiswarya-jenkins-reports'
   }
 
   stages {
+
     stage('Checkout') {
       steps { checkout scm }
     }
@@ -56,6 +61,41 @@ pipeline {
 
         // Keep raw artifacts too
         archiveArtifacts artifacts: 'Report/**, target/**', fingerprint: true
+      }
+    }
+
+    // 🔽 NEW: Authenticate Jenkins to GCP using your JSON service account
+    stage('GCP Auth') {
+      steps {
+        withCredentials([file(credentialsId: 'gcp-sa-key', variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
+          bat """
+          gcloud auth activate-service-account --key-file="%GOOGLE_APPLICATION_CREDENTIALS%"
+          gcloud config set project %GCP_PROJECT%
+          """
+        }
+      }
+    }
+
+    // 🔽 NEW: Upload test artifacts to your GCS bucket
+    stage('Upload Reports to GCS') {
+      steps {
+        withCredentials([file(credentialsId: 'gcp-sa-key', variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
+          bat """
+          gcloud auth activate-service-account --key-file="%GOOGLE_APPLICATION_CREDENTIALS%"
+          gcloud config set project %GCP_PROJECT%
+
+          REM Create a demo file to prove the integration works
+          echo Jenkins to GCP integration successful > jenkins-gcp-demo.txt
+
+          REM Upload the demo file
+          gsutil cp jenkins-gcp-demo.txt gs://%GCS_BUCKET%/
+
+          REM OPTIONAL: Upload Maven test reports if they exist
+          IF EXIST target\\surefire-reports (
+              gsutil cp target\\surefire-reports\\* gs://%GCS_BUCKET%/surefire-reports/
+          )
+          """
+        }
       }
     }
   }
